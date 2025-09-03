@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/devmalloni/pelucio v0.0.0-20250828211245-e5512eb6b134
+	github.com/devmalloni/pelucio v0.0.1
 	github.com/gofrs/uuid/v5 v5.3.2
 	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/jmoiron/sqlx v1.4.0

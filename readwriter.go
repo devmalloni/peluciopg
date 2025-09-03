@@ -265,8 +265,8 @@ func (rw *ReadWriterPG) WriteTransaction(ctx context.Context, transaction *peluc
 
 	dbTransaction := newTransactionFromPelucio(transaction)
 	_, err = tx.NamedExecContext(ctx, `
-		INSERT INTO transactions (id, external_id, description, metadata, created_at)
-		VALUES (:id, :external_id, :description, :metadata, :created_at)
+		INSERT INTO transactions (id, external_id, description, metadata, created_at, executed_at)
+		VALUES (:id, :external_id, :description, :metadata, :created_at, :executed_at)
 	`, dbTransaction)
 	if err != nil {
 		return err

@@ -100,10 +100,13 @@ func TestWriteTransaction(t *testing.T) {
 
 	transaction := pelucio.Deposit("external", firstAccount.ID, secondAccount.ID, big.NewInt(100), "USD")
 
+	now := time.Now()
+	transaction.ExecutedAt = &now
+
 	mock.ExpectBegin()
 
 	mock.ExpectExec("INSERT INTO transactions").
-		WithArgs(transaction.ID, transaction.ExternalID, transaction.Description, sqlmock.AnyArg(), transaction.CreatedAt). // new_version
+		WithArgs(transaction.ID, transaction.ExternalID, transaction.Description, sqlmock.AnyArg(), transaction.CreatedAt, transaction.ExecutedAt). // new_version
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	mock.ExpectExec("INSERT INTO entries").
@@ -225,8 +228,14 @@ func TestReadAccounts(t *testing.T) {
 		ExternalIDs: []string{"external1", "external2"},
 	}
 
-	firstAccount := pelucio.NewAccount("external1", "First Account", pelucio.Debit, nil, xtime.DefaultClock)
-	secondAccount := pelucio.NewAccount("external2", "Second Account", pelucio.Debit, nil, xtime.DefaultClock)
+	firstAccount := pelucio.NewAccount(xtime.DefaultClock,
+		pelucio.WithExternalID("external1"),
+		pelucio.WithName("Second Account"),
+		pelucio.WithNormalSide(pelucio.Debit))
+	secondAccount := pelucio.NewAccount(xtime.DefaultClock,
+		pelucio.WithExternalID("external2"),
+		pelucio.WithName("Second Account"),
+		pelucio.WithNormalSide(pelucio.Debit))
 
 	txRows := sqlmock.
 		NewRows([]string{"id", "external_id", "name", "metadata", "normal_side", "version", "balance", "created_at", "updated_at", "deleted_at"}).
@@ -250,10 +259,12 @@ func TestReadTransaction(t *testing.T) {
 	defer cleanup()
 
 	transaction := pelucio.Deposit("external", xuuid.New(), xuuid.New(), big.NewInt(100), "USD")
+	now := time.Now()
+	transaction.ExecutedAt = &now
 
 	txRows := sqlmock.
-		NewRows([]string{"id", "external_id", "description", "metadata", "created_at"}).
-		AddRow(transaction.ID, transaction.ExternalID, transaction.Description, []byte("{}"), transaction.CreatedAt)
+		NewRows([]string{"id", "external_id", "description", "metadata", "created_at", "executed_at"}).
+		AddRow(transaction.ID, transaction.ExternalID, transaction.Description, []byte("{}"), transaction.CreatedAt, transaction.ExecutedAt)
 
 	mock.ExpectQuery("SELECT (.+) FROM transactions WHERE id = \\$1").
 		WithArgs(transaction.ID).
@@ -264,6 +275,7 @@ func TestReadTransaction(t *testing.T) {
 	assert.Equal(t, transaction.ID, resultTx.ID)
 	assert.Equal(t, transaction.ExternalID, resultTx.ExternalID)
 	assert.Equal(t, transaction.Description, resultTx.Description)
+	assert.Equal(t, transaction.ExecutedAt, resultTx.ExecutedAt)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

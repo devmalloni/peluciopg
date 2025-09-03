@@ -12,6 +12,10 @@ github.com/devmalloni/pelucio v0.0.0-20250825224251-06ca434aeb76 h1:Tf8IA1hWd7uh
 github.com/devmalloni/pelucio v0.0.0-20250825224251-06ca434aeb76/go.mod h1:SEF3Nn78P0EmxpNRWL4mv89AEkD9Fphav39tj0eDyrM=
 github.com/devmalloni/pelucio v0.0.0-20250828211245-e5512eb6b134 h1:VEmfsX6QujgT7gnYLeLkLXrdSzpgqIQsxLlxch/U5wQ=
 github.com/devmalloni/pelucio v0.0.0-20250828211245-e5512eb6b134/go.mod h1:SEF3Nn78P0EmxpNRWL4mv89AEkD9Fphav39tj0eDyrM=
+github.com/devmalloni/pelucio v0.0.0-20250903163455-e7f3862f6d27 h1:jKzJ/XXTuyKPnlqntmnLfXEtFYHBQVwIMNtb8kyfTrE=
+github.com/devmalloni/pelucio v0.0.0-20250903163455-e7f3862f6d27/go.mod h1:SEF3Nn78P0EmxpNRWL4mv89AEkD9Fphav39tj0eDyrM=
+github.com/devmalloni/pelucio v0.0.1 h1:7a7JUziMWn95eTz71jayxpcKsAGRvL2i48sWnSF27M0=
+github.com/devmalloni/pelucio v0.0.1/go.mod h1:SEF3Nn78P0EmxpNRWL4mv89AEkD9Fphav39tj0eDyrM=
 github.com/dhui/dktest v0.4.5 h1:uUfYBIVREmj/Rw6MvgmqNAYzTiKOHJak+enB5Di73MM=
 github.com/dhui/dktest v0.4.5/go.mod h1:tmcyeHDKagvlDrz7gDKq4UAJOLIfVZYkfD5OnHDwcCo=
 github.com/distribution/reference v0.6.0 h1:0IXCQ5g4/QMHHkarYzh5l+u8T3t73zM5QvfrDyIgxBk=
