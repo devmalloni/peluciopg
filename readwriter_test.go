@@ -266,9 +266,26 @@ func TestReadTransaction(t *testing.T) {
 		NewRows([]string{"id", "external_id", "description", "metadata", "created_at", "executed_at"}).
 		AddRow(transaction.ID, transaction.ExternalID, transaction.Description, []byte("{}"), transaction.CreatedAt, transaction.ExecutedAt)
 
+	entrytxRows := sqlmock.
+		NewRows([]string{
+			"id",
+			"transaction_id",
+			"account_id",
+			"entry_side",
+			"account_side",
+			"amount",
+			"currency",
+			"created_at"}).
+		AddRow(transaction.Entries[0].ID, transaction.Entries[0].TransactionID, transaction.Entries[0].AccountID, transaction.Entries[0].EntrySide, transaction.Entries[0].AccountSide, "100", transaction.Entries[0].Currency, transaction.Entries[0].CreatedAt).
+		AddRow(transaction.Entries[1].ID, transaction.Entries[1].TransactionID, transaction.Entries[1].AccountID, transaction.Entries[1].EntrySide, transaction.Entries[1].AccountSide, "100", transaction.Entries[1].Currency, transaction.Entries[1].CreatedAt)
+
 	mock.ExpectQuery("SELECT (.+) FROM transactions WHERE id = \\$1").
 		WithArgs(transaction.ID).
 		WillReturnRows(txRows)
+
+	mock.ExpectQuery("SELECT (.+) FROM entries WHERE transaction_id = \\$1").
+		WithArgs(transaction.ID).
+		WillReturnRows(entrytxRows)
 
 	resultTx, err := db.ReadTransaction(context.Background(), transaction.ID)
 	assert.NoError(t, err)
@@ -276,6 +293,7 @@ func TestReadTransaction(t *testing.T) {
 	assert.Equal(t, transaction.ExternalID, resultTx.ExternalID)
 	assert.Equal(t, transaction.Description, resultTx.Description)
 	assert.Equal(t, transaction.ExecutedAt, resultTx.ExecutedAt)
+	assert.Equal(t, len(transaction.Entries), 2)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

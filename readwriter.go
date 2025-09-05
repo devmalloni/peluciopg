@@ -393,15 +393,24 @@ func (rw *ReadWriterPG) ReadAccounts(ctx context.Context, filter pelucio.ReadAcc
 }
 
 func (rw *ReadWriterPG) ReadTransaction(ctx context.Context, transactionID uuid.UUID) (*pelucio.Transaction, error) {
-	var transaction transaction
-	err := rw.DB.GetContext(ctx, &transaction, "SELECT * FROM transactions WHERE id = $1", transactionID)
+	var dbTransaction transaction
+	err := rw.DB.GetContext(ctx, &dbTransaction, "SELECT * FROM transactions WHERE id = $1", transactionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, pelucio.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	return transaction.ToTransaction(), nil
+
+	entries, err := rw.ReadEntriesOfTransaction(ctx, dbTransaction.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	transaction := dbTransaction.ToTransaction()
+	transaction.Entries = entries
+
+	return transaction, nil
 }
 
 func (rw *ReadWriterPG) ReadTransactionByExternalID(ctx context.Context, externalID string) (*pelucio.Transaction, error) {
