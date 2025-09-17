@@ -510,6 +510,7 @@ func (rw *ReadWriterPG) ReadEntries(ctx context.Context, filter pelucio.ReadEntr
 	}
 
 	query += " ORDER BY created_at DESC"
+	query = rw.DB.Rebind(query)
 
 	entriesdb := []*entry{}
 	err := rw.DB.SelectContext(ctx, &entriesdb, query, args...)
