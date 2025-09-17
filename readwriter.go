@@ -436,12 +436,12 @@ func (rw *ReadWriterPG) ReadTransactions(ctx context.Context, filter pelucio.Rea
 		conditions = append(conditions, "created_at <= ?")
 		args = append(args, filter.ToDate)
 	}
-	if filter.AccountIDs != nil {
+	if len(filter.AccountIDs) > 0 {
 		q, argss, _ := sqlx.In("entries.account_id IN (?)", filter.AccountIDs)
 		conditions = append(conditions, q)
 		args = append(args, argss...)
 	}
-	if filter.ExternalIDs != nil {
+	if len(filter.ExternalIDs) > 0 {
 		q, argss, _ := sqlx.In("transactions.external_id IN (?)", filter.ExternalIDs)
 		conditions = append(conditions, q)
 		args = append(args, argss...)
@@ -494,13 +494,13 @@ func (rw *ReadWriterPG) ReadEntries(ctx context.Context, filter pelucio.ReadEntr
 		conditions = append(conditions, "created_at <= ?")
 		args = append(args, filter.ToDate)
 	}
-	if filter.AccountIDs != nil {
-		query, argss, _ := sqlx.In("account_id IN ANY(?)", filter.AccountIDs)
+	if len(filter.AccountIDs) > 0 {
+		query, argss, _ := sqlx.In("account_id IN (?)", filter.AccountIDs)
 		conditions = append(conditions, query)
 		args = append(args, argss...)
 	}
-	if filter.TransactionIDs != nil {
-		query, argss, _ := sqlx.In("transaction_id IN ANY(?)", filter.TransactionIDs)
+	if len(filter.TransactionIDs) > 0 {
+		query, argss, _ := sqlx.In("transaction_id IN (?)", filter.TransactionIDs)
 		conditions = append(conditions, query)
 		args = append(args, argss...)
 	}
