@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -343,10 +344,19 @@ func (rw *ReadWriterPG) ReadAccountByExternalID(ctx context.Context, externalID 
 	return acc, nil
 }
 
-func (rw *ReadWriterPG) ReadAccounts(ctx context.Context, filter pelucio.ReadAccountFilter) ([]*pelucio.Account, error) {
+func (rw *ReadWriterPG) ReadAccounts(ctx context.Context, filter pelucio.ReadAccountFilter) ([]*pelucio.Account, *string, error) {
 	conditions := []string{}
 	args := []interface{}{}
 
+	if filter.PaginationToken != nil {
+		createdAt, id, err := decodePaginationToken(*filter.PaginationToken)
+		if err != nil {
+			return nil, nil, err
+		}
+		conditions = append(conditions, "(created_at < ? AND id > ?)")
+		args = append(args, createdAt)
+		args = append(args, id)
+	}
 	if filter.FromDate != nil {
 		conditions = append(conditions, "created_at >= ?")
 		args = append(args, filter.FromDate)
@@ -371,25 +381,35 @@ func (rw *ReadWriterPG) ReadAccounts(ctx context.Context, filter pelucio.ReadAcc
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	query += " ORDER BY created_at DESC "
+	query += " ORDER BY created_at DESC, id ASC "
+	if filter.Limit != nil {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+	}
 	query = rw.DB.Rebind(query)
 
 	accounts := []*account{}
 	err := rw.DB.SelectContext(ctx, &accounts, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var res []*pelucio.Account
 	for _, acc := range accounts {
 		a, err := acc.ToAccount()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		res = append(res, a)
 	}
 
-	return res, nil
+	var paginationToken *string
+	if len(res) > 0 && filter.Limit != nil {
+		s := generatePaginationToken(res[len(res)-1].CreatedAt, res[len(res)-1].ID)
+		paginationToken = &s
+	}
+
+	return res, paginationToken, nil
 }
 
 func (rw *ReadWriterPG) ReadTransaction(ctx context.Context, transactionID uuid.UUID) (*pelucio.Transaction, error) {
@@ -425,9 +445,19 @@ func (rw *ReadWriterPG) ReadTransactionByExternalID(ctx context.Context, externa
 	return transaction.ToTransaction(), nil
 }
 
-func (rw *ReadWriterPG) ReadTransactions(ctx context.Context, filter pelucio.ReadTransactionFilter) ([]*pelucio.Transaction, error) {
+func (rw *ReadWriterPG) ReadTransactions(ctx context.Context, filter pelucio.ReadTransactionFilter) ([]*pelucio.Transaction, *string, error) {
 	conditions := []string{}
 	args := []interface{}{}
+
+	if filter.PaginationToken != nil {
+		createdAt, id, err := decodePaginationToken(*filter.PaginationToken)
+		if err != nil {
+			return nil, nil, err
+		}
+		conditions = append(conditions, "(transactions.created_at < ? AND transactions.id > ?)")
+		args = append(args, createdAt)
+		args = append(args, id)
+	}
 	if filter.FromDate != nil {
 		conditions = append(conditions, "transactions.created_at >= ?")
 		args = append(args, filter.FromDate)
@@ -450,22 +480,30 @@ func (rw *ReadWriterPG) ReadTransactions(ctx context.Context, filter pelucio.Rea
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
-	query += " ORDER BY transactions.created_at DESC"
-
+	query += " ORDER BY transactions.created_at DESC, transactions.id ASC"
+	if filter.Limit != nil {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+	}
 	query = rw.DB.Rebind(query)
 
 	transactionsDB := []*transaction{}
 	err := rw.DB.SelectContext(ctx, &transactionsDB, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	transactions := make([]*pelucio.Transaction, len(transactionsDB))
+	res := make([]*pelucio.Transaction, len(transactionsDB))
 	for i, t := range transactionsDB {
-		transactions[i] = t.ToTransaction()
+		res[i] = t.ToTransaction()
+	}
+	var paginationToken *string
+	if len(res) > 0 && filter.Limit != nil {
+		s := generatePaginationToken(res[len(res)-1].CreatedAt, res[len(res)-1].ID)
+		paginationToken = &s
 	}
 
-	return transactions, err
+	return res, paginationToken, err
 }
 
 func (rw *ReadWriterPG) ReadEntriesOfAccount(ctx context.Context, accountID uuid.UUID) ([]*pelucio.Entry, error) {
@@ -483,9 +521,18 @@ func (rw *ReadWriterPG) ReadEntriesOfAccount(ctx context.Context, accountID uuid
 	return entries, err
 }
 
-func (rw *ReadWriterPG) ReadEntries(ctx context.Context, filter pelucio.ReadEntryFilter) ([]*pelucio.Entry, error) {
+func (rw *ReadWriterPG) ReadEntries(ctx context.Context, filter pelucio.ReadEntryFilter) ([]*pelucio.Entry, *string, error) {
 	conditions := []string{}
 	args := []interface{}{}
+	if filter.PaginationToken != nil {
+		createdAt, id, err := decodePaginationToken(*filter.PaginationToken)
+		if err != nil {
+			return nil, nil, err
+		}
+		conditions = append(conditions, "(created_at < ? AND id > ?)")
+		args = append(args, createdAt)
+		args = append(args, id)
+	}
 	if filter.FromDate != nil {
 		conditions = append(conditions, "created_at >= ?")
 		args = append(args, filter.FromDate)
@@ -509,21 +556,30 @@ func (rw *ReadWriterPG) ReadEntries(ctx context.Context, filter pelucio.ReadEntr
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY created_at DESC, id ASC"
+	if filter.Limit != nil {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+	}
 	query = rw.DB.Rebind(query)
 
 	entriesdb := []*entry{}
 	err := rw.DB.SelectContext(ctx, &entriesdb, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	entries := make([]*pelucio.Entry, len(entriesdb))
+	res := make([]*pelucio.Entry, len(entriesdb))
 	for i, e := range entriesdb {
-		entries[i] = e.ToEntry()
+		res[i] = e.ToEntry()
 	}
 
-	return entries, err
+	var paginationToken *string
+	if len(res) > 0 && filter.Limit != nil {
+		s := generatePaginationToken(res[len(res)-1].CreatedAt, res[len(res)-1].ID)
+		paginationToken = &s
+	}
+	return res, paginationToken, err
 }
 
 func (rw *ReadWriterPG) ReadEntriesOfTransaction(ctx context.Context, transactionID uuid.UUID) ([]*pelucio.Entry, error) {
@@ -539,4 +595,35 @@ func (rw *ReadWriterPG) ReadEntriesOfTransaction(ctx context.Context, transactio
 	}
 
 	return entries, err
+}
+
+func generatePaginationToken(createdAt time.Time, id uuid.UUID) string {
+	token := fmt.Sprintf("%s|%s", createdAt.Format(time.RFC3339Nano), id.String())
+	token = base64.StdEncoding.EncodeToString([]byte(token))
+	return token
+}
+
+func decodePaginationToken(paginationToken string) (createdAt time.Time, id uuid.UUID, err error) {
+	token, err := base64.StdEncoding.DecodeString(paginationToken)
+	if err != nil {
+		return
+	}
+
+	splittedToken := strings.Split(string(token), "|")
+	if len(splittedToken) != 2 {
+		err = errors.New("unexpected token length")
+		return
+	}
+
+	createdAt, err = time.Parse(time.RFC3339Nano, splittedToken[0])
+	if err != nil {
+		return
+	}
+
+	id, err = uuid.FromString(splittedToken[1])
+	if err != nil {
+		return
+	}
+
+	return
 }

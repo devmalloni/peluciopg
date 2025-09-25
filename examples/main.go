@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"math/big"
 
 	"github.com/devmalloni/peluciopg"
@@ -68,5 +69,29 @@ func main() {
 
 	if creditBalance.Get("BRL").Cmp(big.NewInt(10020)) != 0 {
 		panic("Debit account balance mismatch")
+	}
+
+	// working with pagination
+	limit := uint(1)
+	var token *string
+	var res []*pelucio.Entry
+	for {
+		res, token, err = pelucioInstance.FindEntries(context.Background(), pelucio.ReadEntryFilter{
+			Limit:           &limit,
+			PaginationToken: token,
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		if len(res) == 0 {
+			log.Print("no entries found")
+			return
+		}
+
+		for _, item := range res {
+			log.Printf("%v", item.ID)
+		}
+
 	}
 }

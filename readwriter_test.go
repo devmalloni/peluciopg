@@ -246,11 +246,87 @@ func TestReadAccounts(t *testing.T) {
 		WithArgs(filter.FromDate, filter.ToDate, filter.AccountIDs[0], filter.ExternalIDs[0], filter.ExternalIDs[1]).
 		WillReturnRows(txRows)
 
-	resultTxs, err := db.ReadAccounts(context.Background(), filter)
+	resultTxs, paginationToken, err := db.ReadAccounts(context.Background(), filter)
 	assert.NoError(t, err)
+	assert.Nil(t, paginationToken)
 	assert.Len(t, resultTxs, 2)
 	assert.Equal(t, firstAccount.ID, resultTxs[0].ID)
 	assert.Equal(t, secondAccount.ID, resultTxs[1].ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReadAccounts_Paginated(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+
+	limit := uint(1)
+	filter := pelucio.ReadAccountFilter{
+		FromDate:    xtime.DefaultClock.NilNow(),
+		ToDate:      xtime.DefaultClock.NilNow(),
+		AccountIDs:  []string{xuuid.New().String()},
+		ExternalIDs: []string{"external1", "external2"},
+		Limit:       &limit,
+	}
+
+	firstAccount := pelucio.NewAccount(xtime.DefaultClock,
+		pelucio.WithExternalID("external1"),
+		pelucio.WithName("Second Account"),
+		pelucio.WithNormalSide(pelucio.Debit))
+
+	txRows := sqlmock.
+		NewRows([]string{"id", "external_id", "name", "metadata", "normal_side", "version", "balance", "created_at", "updated_at", "deleted_at"}).
+		AddRow(firstAccount.ID, firstAccount.ExternalID, firstAccount.Name, []byte("{}"), firstAccount.NormalSide, int64(1), []byte("{\"BRL\": 100 }"), firstAccount.CreatedAt, firstAccount.UpdatedAt, firstAccount.DeletedAt)
+
+	mock.ExpectQuery("SELECT (.+) FROM accounts (.+) ORDER BY created_at DESC, id ASC LIMIT").
+		WithArgs(filter.FromDate, filter.ToDate, filter.AccountIDs[0], filter.ExternalIDs[0], filter.ExternalIDs[1], filter.Limit).
+		WillReturnRows(txRows)
+
+	expectedPaginationToken := generatePaginationToken(firstAccount.CreatedAt, firstAccount.ID)
+	resultTxs, paginationToken, err := db.ReadAccounts(context.Background(), filter)
+	assert.NoError(t, err)
+	assert.Equal(t, *paginationToken, expectedPaginationToken)
+	assert.Len(t, resultTxs, 1)
+	assert.Equal(t, firstAccount.ID, resultTxs[0].ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReadAccounts_PaginatedWithPaginationToken(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+
+	limit := uint(1)
+	createdAt := time.Now()
+	id := xuuid.New()
+	token := generatePaginationToken(createdAt, id)
+	createdAt, id, _ = decodePaginationToken(token)
+	filter := pelucio.ReadAccountFilter{
+		FromDate:        xtime.DefaultClock.NilNow(),
+		ToDate:          xtime.DefaultClock.NilNow(),
+		AccountIDs:      []string{xuuid.New().String()},
+		ExternalIDs:     []string{"external1", "external2"},
+		Limit:           &limit,
+		PaginationToken: &token,
+	}
+
+	firstAccount := pelucio.NewAccount(xtime.DefaultClock,
+		pelucio.WithExternalID("external1"),
+		pelucio.WithName("Second Account"),
+		pelucio.WithNormalSide(pelucio.Debit))
+
+	txRows := sqlmock.
+		NewRows([]string{"id", "external_id", "name", "metadata", "normal_side", "version", "balance", "created_at", "updated_at", "deleted_at"}).
+		AddRow(firstAccount.ID, firstAccount.ExternalID, firstAccount.Name, []byte("{}"), firstAccount.NormalSide, int64(1), []byte("{\"BRL\": 100 }"), firstAccount.CreatedAt, firstAccount.UpdatedAt, firstAccount.DeletedAt)
+
+	mock.ExpectQuery("SELECT (.+) FROM accounts (.+) ORDER BY created_at DESC, id ASC LIMIT").
+		WithArgs(createdAt, id, filter.FromDate, filter.ToDate, filter.AccountIDs[0], filter.ExternalIDs[0], filter.ExternalIDs[1], filter.Limit).
+		WillReturnRows(txRows)
+
+	expectedPaginationToken := generatePaginationToken(firstAccount.CreatedAt, firstAccount.ID)
+	resultTxs, paginationToken, err := db.ReadAccounts(context.Background(), filter)
+	assert.NoError(t, err)
+	assert.Equal(t, *paginationToken, expectedPaginationToken)
+	assert.Len(t, resultTxs, 1)
+	assert.Equal(t, firstAccount.ID, resultTxs[0].ID)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -342,11 +418,81 @@ func TestReadTransactions(t *testing.T) {
 		WithArgs(filter.FromDate, filter.ToDate, filter.AccountIDs[0], filter.ExternalIDs[0], filter.ExternalIDs[1]).
 		WillReturnRows(txRows)
 
-	resultTxs, err := db.ReadTransactions(context.Background(), filter)
+	resultTxs, paginationToken, err := db.ReadTransactions(context.Background(), filter)
 	assert.NoError(t, err)
+	assert.Nil(t, paginationToken)
 	assert.Len(t, resultTxs, 2)
 	assert.Equal(t, firstTx.ID, resultTxs[0].ID)
 	assert.Equal(t, secondTx.ID, resultTxs[1].ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReadTransactions_Paginated(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+
+	limit := uint(1)
+	filter := pelucio.ReadTransactionFilter{
+		FromDate:    xtime.DefaultClock.NilNow(),
+		ToDate:      xtime.DefaultClock.NilNow(),
+		AccountIDs:  []string{xuuid.New().String()},
+		ExternalIDs: []string{"external1", "external2"},
+		Limit:       &limit,
+	}
+
+	firstTx := pelucio.Deposit("external1", xuuid.New(), xuuid.New(), big.NewInt(100), "USD")
+
+	txRows := sqlmock.
+		NewRows([]string{"id", "external_id", "description", "metadata", "created_at"}).
+		AddRow(firstTx.ID, firstTx.ExternalID, firstTx.Description, []byte("{}"), firstTx.CreatedAt)
+
+	mock.ExpectQuery("SELECT (.+) FROM transactions LEFT JOIN entries ON transactions.id = entries.transaction_id (.+) ORDER BY transactions.created_at DESC, transactions.id ASC LIMIT").
+		WithArgs(filter.FromDate, filter.ToDate, filter.AccountIDs[0], filter.ExternalIDs[0], filter.ExternalIDs[1], filter.Limit).
+		WillReturnRows(txRows)
+
+	expectedPaginationToken := generatePaginationToken(firstTx.CreatedAt, firstTx.ID)
+	resultTxs, paginationToken, err := db.ReadTransactions(context.Background(), filter)
+	assert.NoError(t, err)
+	assert.Equal(t, *paginationToken, expectedPaginationToken)
+	assert.Len(t, resultTxs, 1)
+	assert.Equal(t, firstTx.ID, resultTxs[0].ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReadTransactions_PaginatedWithPaginationToken(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+
+	limit := uint(1)
+	lastCreatedAt := time.Now()
+	lastID := xuuid.New()
+	token := generatePaginationToken(lastCreatedAt, lastID)
+	lastCreatedAt, lastID, _ = decodePaginationToken(token)
+	filter := pelucio.ReadTransactionFilter{
+		FromDate:        xtime.DefaultClock.NilNow(),
+		ToDate:          xtime.DefaultClock.NilNow(),
+		AccountIDs:      []string{xuuid.New().String()},
+		ExternalIDs:     []string{"external1", "external2"},
+		Limit:           &limit,
+		PaginationToken: &token,
+	}
+
+	firstTx := pelucio.Deposit("external1", xuuid.New(), xuuid.New(), big.NewInt(100), "USD")
+
+	txRows := sqlmock.
+		NewRows([]string{"id", "external_id", "description", "metadata", "created_at"}).
+		AddRow(firstTx.ID, firstTx.ExternalID, firstTx.Description, []byte("{}"), firstTx.CreatedAt)
+
+	mock.ExpectQuery("SELECT (.+) FROM transactions LEFT JOIN entries ON transactions.id = entries.transaction_id (.+) ORDER BY transactions.created_at DESC, transactions.id ASC LIMIT").
+		WithArgs(lastCreatedAt, lastID, filter.FromDate, filter.ToDate, filter.AccountIDs[0], filter.ExternalIDs[0], filter.ExternalIDs[1], filter.Limit).
+		WillReturnRows(txRows)
+
+	expectedPaginationToken := generatePaginationToken(firstTx.CreatedAt, firstTx.ID)
+	resultTxs, paginationToken, err := db.ReadTransactions(context.Background(), filter)
+	assert.NoError(t, err)
+	assert.Equal(t, *paginationToken, expectedPaginationToken)
+	assert.Len(t, resultTxs, 1)
+	assert.Equal(t, firstTx.ID, resultTxs[0].ID)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -438,9 +584,123 @@ func TestReadEntries(t *testing.T) {
 		WithArgs(filter.FromDate, filter.ToDate, filter.AccountIDs[0], filter.TransactionIDs[0], filter.TransactionIDs[1]).
 		WillReturnRows(txRows)
 
-	resultTxs, err := db.ReadEntries(context.Background(), filter)
+	resultTxs, paginationToken, err := db.ReadEntries(context.Background(), filter)
 	assert.NoError(t, err)
+	assert.Nil(t, paginationToken)
 	assert.Len(t, resultTxs, 2)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReadEntries_Paginated_WithLimit(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+
+	limit := uint(1)
+
+	filter := pelucio.ReadEntryFilter{
+		FromDate:       xtime.DefaultClock.NilNow(),
+		ToDate:         xtime.DefaultClock.NilNow(),
+		AccountIDs:     []string{xuuid.New().String()},
+		TransactionIDs: []string{"external1", "external2"},
+		Limit:          &limit,
+	}
+
+	firstEntry := &pelucio.Entry{
+		ID:          xuuid.New(),
+		EntrySide:   pelucio.Debit,
+		AccountID:   xuuid.New(),
+		AccountSide: pelucio.Credit,
+		Amount:      big.NewInt(100),
+		Currency:    "USD",
+		CreatedAt:   time.Now(),
+	}
+	secondEntry := &pelucio.Entry{
+		ID:          xuuid.New(),
+		EntrySide:   pelucio.Debit,
+		AccountID:   xuuid.New(),
+		AccountSide: pelucio.Credit,
+		Amount:      big.NewInt(100),
+		Currency:    "USD",
+		CreatedAt:   time.Now(),
+	}
+
+	txRows := sqlmock.
+		NewRows([]string{
+			"id",
+			"transaction_id",
+			"account_id",
+			"entry_side",
+			"account_side",
+			"amount",
+			"currency",
+			"created_at"}).
+		AddRow(firstEntry.ID, firstEntry.TransactionID, firstEntry.AccountID, firstEntry.EntrySide, firstEntry.AccountSide, "100", firstEntry.Currency, firstEntry.CreatedAt).
+		AddRow(secondEntry.ID, secondEntry.TransactionID, secondEntry.AccountID, secondEntry.EntrySide, secondEntry.AccountSide, "100", secondEntry.Currency, secondEntry.CreatedAt)
+
+	mock.ExpectQuery("SELECT (.+) FROM entries (.+) ORDER BY created_at DESC, id ASC LIMIT").
+		WithArgs(filter.FromDate, filter.ToDate, filter.AccountIDs[0], filter.TransactionIDs[0], filter.TransactionIDs[1], filter.Limit).
+		WillReturnRows(txRows)
+
+	expectedPaginationToken := generatePaginationToken(secondEntry.CreatedAt, secondEntry.ID)
+
+	resultTxs, paginationToken, err := db.ReadEntries(context.Background(), filter)
+	assert.NoError(t, err)
+	assert.Equal(t, *paginationToken, expectedPaginationToken)
+	assert.Len(t, resultTxs, 2)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReadEntries_Paginated_WithPaginationToken(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+
+	secondEntry := &pelucio.Entry{
+		ID:        xuuid.New(),
+		CreatedAt: time.Now(),
+	}
+	thirdEntry := &pelucio.Entry{
+		ID:          xuuid.New(),
+		EntrySide:   pelucio.Debit,
+		AccountID:   xuuid.New(),
+		AccountSide: pelucio.Credit,
+		Currency:    "USD",
+		CreatedAt:   time.Now(),
+	}
+
+	limit := uint(1)
+	paginationToken := generatePaginationToken(secondEntry.CreatedAt, secondEntry.ID)
+	createdAt, _, _ := decodePaginationToken(paginationToken)
+	filter := pelucio.ReadEntryFilter{
+		FromDate:        xtime.DefaultClock.NilNow(),
+		ToDate:          xtime.DefaultClock.NilNow(),
+		AccountIDs:      []string{xuuid.New().String()},
+		TransactionIDs:  []string{"external1", "external2"},
+		Limit:           &limit,
+		PaginationToken: &paginationToken,
+	}
+
+	txRows := sqlmock.
+		NewRows([]string{
+			"id",
+			"transaction_id",
+			"account_id",
+			"entry_side",
+			"account_side",
+			"amount",
+			"currency",
+			"created_at"}).
+		AddRow(thirdEntry.ID, thirdEntry.TransactionID, thirdEntry.AccountID, thirdEntry.EntrySide, thirdEntry.AccountSide, "100", thirdEntry.Currency, thirdEntry.CreatedAt)
+
+	mock.ExpectQuery("SELECT (.+) FROM entries (.+) ORDER BY created_at DESC, id ASC LIMIT").
+		WithArgs(createdAt, secondEntry.ID, filter.FromDate, filter.ToDate, filter.AccountIDs[0], filter.TransactionIDs[0], filter.TransactionIDs[1], filter.Limit).
+		WillReturnRows(txRows)
+
+	expectedPaginationToken := generatePaginationToken(thirdEntry.CreatedAt, thirdEntry.ID)
+
+	resultTxs, newPaginationToken, err := db.ReadEntries(context.Background(), filter)
+	assert.NoError(t, err)
+	assert.Equal(t, *newPaginationToken, expectedPaginationToken)
+	assert.Len(t, resultTxs, 1)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
